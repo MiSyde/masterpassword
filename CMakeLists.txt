@@ -9,4 +9,8 @@ add_executable(MasterPassword main.c
         pbkdf2.c
         pbkdf2.h
         chacha.c
-        chacha.h)
+        chacha.h
+        hmac.c
+        hmac.h
+        sha256.c
+        sha256.h)

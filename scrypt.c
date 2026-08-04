@@ -9,14 +9,13 @@
 
 
 unsigned char* scrypt(unsigned char* passPhrase, unsigned char* salt, int const costFactor, int const blockSizeFactor,
-                      int parallelizationFactor, int const desiredKeyLen, int const mixFuncLen) {
+                      int parallelizationFactor, int const desiredKeyLen, int const hashLen, int const mixFuncLen) {
 
     double const logOfCostFactor = log2(costFactor);
 
     if (logOfCostFactor == 0 || modf(logOfCostFactor, (double*)2) != 0) goto cost_fact_err;
-    if (parallelizationFactor >= pow(2, 32) - 1) goto paralell_err;
+    if (parallelizationFactor > pow(2, 32) - 1) goto paralell_err;
 
-    int const hashLen = 32; // The length in octets of the hash function. 32 -> sha256
     parallelizationFactor *= hashLen/mixFuncLen;
     int const blockSize = 128 * blockSizeFactor;
 
@@ -63,7 +62,7 @@ void ROMix(unsigned char* block, int const blockSize, int const iterations) {
 
     for (int i = 0; i < iterations; ++i) {
         uint64_t const j = Integrify(X, blockSize) % iterations;
-        xor(X, V + j * blockSize, blockSize);
+        xor_block(X, X, V + j * blockSize, blockSize);
         unsigned char* temp = BlockMix(X, Y, blockSize);
         memcpy(X, temp , blockSize);
         free(temp);
@@ -94,7 +93,7 @@ void ROMix(unsigned char* block, int const blockSize, int const iterations) {
         exit(-1);
 }
 
-unsigned char* BlockMix(unsigned char* block, unsigned char* Y, int const blockSize) {
+unsigned char* BlockMix(const unsigned char* block, unsigned char* Y, int const blockSize) {
     int const r = blockSize / 128;
     int const chunkCount = 2 * r;
     int const chunkSize = 64;
@@ -107,7 +106,7 @@ unsigned char* BlockMix(unsigned char* block, unsigned char* Y, int const blockS
     memcpy(X, block + (chunkCount - 1) * chunkSize, chunkSize);
 
     for (int i = 0; i < chunkCount; ++i) {
-        xor(X, block + i * chunkSize, chunkSize);
+        xor_block(X,X, block + i * chunkSize, chunkSize);
         chacha_block_bytes(X,X);
         memcpy(Y + i * chunkSize, X, chunkSize);
     }
@@ -133,5 +132,16 @@ uint64_t Integrify(const unsigned char* x, int const blockSize) {
         result |= ((uint64_t)last64 + i) << (8 * i);
     }
 
+    return result;
+}
+
+unsigned char* concat(const unsigned char* a, const size_t aLen, const unsigned char* b, const size_t bLen) {
+    unsigned char* result = malloc(aLen + bLen);
+    if (result == NULL) {
+        perror("Couldn't allocate memory for concat result.");
+        exit(-1);
+    }
+    memcpy(result, a, aLen);
+    memcpy(result + aLen, b, bLen);
     return result;
 }
