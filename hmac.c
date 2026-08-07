@@ -4,17 +4,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "errorhandling.h"
+
 unsigned char* hmac(const unsigned char* key, const size_t keyLen, unsigned char* (*hash)(const unsigned char*, size_t),
-                     const unsigned char* message, const size_t messageLen, int const blockSize, const size_t hashLen) {
+                    const unsigned char* message, const size_t messageLen, int const blockSize, const size_t hashLen) {
 
     unsigned char* blockSizedKey = computeBlockSizedKey(key, keyLen, hash, hashLen, blockSize);
-    if (blockSizedKey == NULL) goto block_null_err;
+    if (blockSizedKey == NULL) return error_handler_null("Couldn't allocate memory for blockSizedKey in computeBlockSizedKey.", 0);
 
     unsigned char* outerKeyPad = malloc(blockSize);
-    if (outerKeyPad == NULL) goto okey_null_err;
+    if (outerKeyPad == NULL) return error_handler_null("Couldn't allocate memory for outerKeyPad in HMAC.", 1, blockSizedKey);
 
     unsigned char* innerKeyPad = malloc(blockSize);
-    if (innerKeyPad == NULL) goto ikey_null_err;
+    if (innerKeyPad == NULL) return error_handler_null("Couldn't allocate memory for innerKeyPad in HMAC.", 2, outerKeyPad, blockSizedKey);
 
     xor_constant(outerKeyPad, blockSizedKey, 0x5c, blockSize);
     xor_constant(innerKeyPad, blockSizedKey, 0x36, blockSize);
@@ -33,19 +35,6 @@ unsigned char* hmac(const unsigned char* key, const size_t keyLen, unsigned char
     free(outerInput);
 
     return result;
-
-    block_null_err:
-        perror("Couldn't allocate memory for blockSizedKey in computeBlockSizedKey.");
-        return NULL;
-    okey_null_err:
-        perror("Couldn't allocate memory for oKeyPad in HMAC.");
-        free(blockSizedKey);
-        return NULL;
-    ikey_null_err:
-        perror("Couldn't allocate memory for innerKeyPad in HMAC.");
-        free(outerKeyPad);
-        free(blockSizedKey);
-        return NULL;
 }
 
 unsigned char* computeBlockSizedKey(const unsigned char* key, size_t keyLen, unsigned char* (*hash)(const unsigned char*, size_t), size_t const hashLen, int const blockSize) {

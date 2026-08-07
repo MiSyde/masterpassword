@@ -13,4 +13,6 @@ add_executable(MasterPassword main.c
         hmac.c
         hmac.h
         sha256.c
-        sha256.h)
+        sha256.h
+        errorhandling.c
+        errorhandling.h)

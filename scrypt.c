@@ -7,20 +7,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "errorhandling.h"
+
 
 unsigned char* scrypt(unsigned char* passPhrase, unsigned char* salt, int const costFactor, int const blockSizeFactor,
                       int parallelizationFactor, int const desiredKeyLen, int const hashLen, int const mixFuncLen) {
 
     double const logOfCostFactor = log2(costFactor);
 
-    if (logOfCostFactor == 0 || modf(logOfCostFactor, (double*)2) != 0) goto cost_fact_err;
-    if (parallelizationFactor > pow(2, 32) - 1) goto paralell_err;
+    if (logOfCostFactor == 0 || modf(logOfCostFactor, (double*)2) != 0) error_handler_exit(2, "Cost factor is not a power of 2.", 0);
+    if (parallelizationFactor > pow(2, 32) - 1) error_handler_exit(32, "Parallelization factor is bigger than the 32th power of 2 - 1.", 0);
 
     parallelizationFactor *= hashLen/mixFuncLen;
     int const blockSize = 128 * blockSizeFactor;
 
     unsigned char* initialData = pbkdf2(passPhrase, salt, 1, blockSize*parallelizationFactor);
-    if (initialData == NULL) goto init_null_err;
+    if (initialData == NULL) error_handler_exit(-1, "Couldn't allocate memory for initial data.", 0);
 
     for (int i = 0; i < parallelizationFactor; ++i) {
         ROMix(initialData + i, blockSize, costFactor);
@@ -28,29 +30,17 @@ unsigned char* scrypt(unsigned char* passPhrase, unsigned char* salt, int const 
 
     free(initialData);
     return pbkdf2(passPhrase, initialData, 1, desiredKeyLen);
-
-    cost_fact_err:
-        perror("Cost factor is not a power of 2.");
-        exit(2);
-
-    paralell_err:
-        perror("Parallelization factor is bigger than the 32th power of 2 - 1.");
-        exit(32);
-
-    init_null_err:
-        perror("Couldn't allocate memory for initial data.");
-        exit(-1);
 }
 
 void ROMix(unsigned char* block, int const blockSize, int const iterations) {
     unsigned char* X = malloc(iterations * blockSize);
-    if (X == NULL) goto x_null_err;
+    if (X == NULL) error_handler_exit(-1, "Couldn't allocate memory for X in ROMix.", 1, block);
 
     unsigned char* V = malloc(blockSize);
-    if (V == NULL) goto v_null_err;
+    if (V == NULL) error_handler_exit(-1, "Couldn't allocate memory for V in ROMix.", 2, block, X);
 
     unsigned char* Y = malloc((blockSize/128)*2-1);
-    if (Y == NULL) goto y_null_err;
+    if (Y == NULL) error_handler_exit(-1, "Couldn't allocate memory for Y in ROMix.", 3, block, X, V);
 
 
     memcpy(X, block, blockSize);
@@ -73,24 +63,6 @@ void ROMix(unsigned char* block, int const blockSize, int const iterations) {
     free(V);
     free(X);
     free(Y);
-
-    x_null_err:
-        free(block);
-        perror("Couldn't allocate memory for X in ROMix.");
-        exit(-1);
-
-    v_null_err:
-        free(block);
-        free(X);
-        perror("Couldn't allocate memory for V in ROMix.");
-        exit(-1);
-
-    y_null_err:
-        free(block);
-        free(X);
-        free(V);
-        perror("Couldn't allocate memory for Y in ROMix.");
-        exit(-1);
 }
 
 unsigned char* BlockMix(const unsigned char* block, unsigned char* Y, int const blockSize) {
@@ -99,10 +71,8 @@ unsigned char* BlockMix(const unsigned char* block, unsigned char* Y, int const 
     int const chunkSize = 64;
 
     unsigned char* X = malloc(chunkSize);
-    if (X == NULL) {
-        perror("Couldn't allocate memory for X in BlockMix.");
-        exit(-1);
-    }
+    if (X == NULL) { error_handler_exit(-1, "Couldn't allocate memory for X in BlockMix.", 2, block, Y); }
+
     memcpy(X, block + (chunkCount - 1) * chunkSize, chunkSize);
 
     for (int i = 0; i < chunkCount; ++i) {
@@ -112,6 +82,8 @@ unsigned char* BlockMix(const unsigned char* block, unsigned char* Y, int const 
     }
 
     unsigned char* result = malloc(blockSize);
+    if (result == NULL) { error_handler_exit(-1, "Couldn't allocate memory for result in BlockMix.", 3, block, Y, X); }
+
     int pos = 0;
     for (int i = 0; i < chunkCount; i += 2) {
         memcpy(result + pos, Y + i * chunkSize, chunkSize);
@@ -137,10 +109,8 @@ uint64_t Integrify(const unsigned char* x, int const blockSize) {
 
 unsigned char* concat(const unsigned char* a, const size_t aLen, const unsigned char* b, const size_t bLen) {
     unsigned char* result = malloc(aLen + bLen);
-    if (result == NULL) {
-        perror("Couldn't allocate memory for concat result.");
-        exit(-1);
-    }
+    if (result == NULL) { error_handler_exit(-1, "Couldn't allocate memory for concat result.", 2, a, b); }
+
     memcpy(result, a, aLen);
     memcpy(result + aLen, b, bLen);
     return result;
